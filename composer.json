@@ -1,0 +1,22 @@
+{
+  "name": "gevorggalstyan/sf-web2lead-submitter",
+  "description": "PHP Composer Package of Salesforce.com Web-To-Lead Submitter",
+  "type": "library",
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "Gevorg A. Galstyan",
+      "email": "gevorg.galstyan@gmail.com"
+    }
+  ],
+  "minimum-stability": "dev",
+  "require": {
+    "php": "^5.3.3 || ^7.0",
+    "gevorggalstyan/sf-web2lead-parser": "*"
+  },
+  "autoload": {
+    "psr-4": {
+      "GevorgGalstyan\\SFW2LSubmitter\\": "src"
+    }
+  }
+}
