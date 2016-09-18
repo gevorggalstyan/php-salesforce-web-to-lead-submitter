@@ -12,7 +12,7 @@
   "minimum-stability": "dev",
   "require": {
     "php": "^5.3.3 || ^7.0",
-    "gevorggalstyan/sf-web2lead-parser": "*"
+    "gevorggalstyan/sf-web2lead-parser": "^1.0.0"
   },
   "autoload": {
     "psr-4": {

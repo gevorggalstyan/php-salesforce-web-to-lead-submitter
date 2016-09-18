@@ -11,42 +11,56 @@ class Submitter
 
     }
 
-    private static function normalize_select_values($values, $acceptable_values, $is_multiple = FALSE)
+    private static function parse($w2l_file)
     {
-        if (!$is_multiple && gettype($values) == 'array') {
-            $values = $values[0];
-        }
-        if (gettype($values) == 'string') {
-            $other_value = '';
-            $was_normalized = FALSE;
-            foreach ($acceptable_values as $acceptable_value) {
-                if (is_null($values) OR $values == '') {
-                    $values = '';
-                } elseif (strtolower($acceptable_value['text']) == strtolower($values)) {
-                    $values = $acceptable_value['text'];
-                    $was_normalized = TRUE;
-                } elseif (strtolower($acceptable_value['text']) == 'other') {
-                    $other_value = $acceptable_value['text'];
+        return Parser::parse($w2l_file);
+    }
+
+    private static function normalize_field($value, $field)
+    {
+        if ($field['tag'] == 'select') {
+            if (gettype($value) == 'array' && !$field['multiple']) {
+                $value = $value[0];
+            }
+
+            if (gettype($value) != 'array') {
+                $other_value = '';
+                $was_normalized = FALSE;
+                foreach ($field['options'][0] as $normal_value) {
+                    if (is_null($value) OR $value == '') {
+                        $value = '';
+                    } elseif (strtolower($normal_value['text']) ==
+                        strtolower($value)
+                    ) {
+                        $value = $normal_value['text'];
+                        $was_normalized = TRUE;
+                    } elseif (strtolower($normal_value['text']) == 'other') {
+                        $other_value = $normal_value['text'];
+                    }
                 }
-            }
-            if (!$was_normalized && $other_value != '') {
-                $values = $other_value;
-            }
-            return $values;
-        } elseif (gettype($values) == 'array') {
-            if ($is_multiple) {
+                if (!$was_normalized && $other_value != '') {
+                    $value = $other_value;
+                }
+                return $value;
+            } else {
                 $normalized_values = [];
-                foreach ($values as $value) {
+                foreach ($value as $v) {
                     $other_value = '';
                     $was_normalized = FALSE;
-                    if (!is_null($value) && $value != '') {
-                        foreach ($acceptable_values as $acceptable_value) {
-                            $fixed_acceptable_value_text = str_replace('&amp;', '&', $acceptable_value['text']);
-                            if (strtolower($fixed_acceptable_value_text) == strtolower($value)) {
-                                $normalized_values[] = $fixed_acceptable_value_text;
+                    if (!is_null($v) && $v != '') {
+                        foreach ($field['options'][0] as $normal_value) {
+                            $normal_text = str_replace(
+                                '&amp;',
+                                '&',
+                                $normal_value['text']
+                            );
+                            if (strtolower($normal_text) == strtolower($v)) {
+                                $normalized_values[] = $normal_text;
                                 $was_normalized = TRUE;
-                            } elseif (strtolower($acceptable_value['text']) == 'other') {
-                                $other_value = $acceptable_value['text'];
+                            } elseif (strtolower($normal_value['text']) ==
+                                'other'
+                            ) {
+                                $other_value = $normal_value['text'];
                             }
                         }
                     }
@@ -54,67 +68,66 @@ class Submitter
                         $normalized_values[] = $other_value;
                     }
                 }
-                $unique_array = array_unique($normalized_values);
-                $array_string = implode('; ', $unique_array);
-                return $array_string;
+                return (implode('; ', array_unique($normalized_values)));
             }
+        } else {
+            return $value;
         }
-        return NULL;
     }
 
-    private static function normalize_lead($sf_lead, $data_structure)
+    private static function normalize($data, $structure)
     {
-        foreach ($sf_lead as $key => $value) {
-            foreach ($data_structure['fields'] as $field) {
-                if ($field['tag'] === 'select' && $key == $field['label']) {
-                    $sf_lead[$key] = self::normalize_select_values($value, $field['options'][0], $field['multiple']);
+        foreach ($data as $key => $value) {
+            foreach ($structure['fields'] as $field) {
+                if ($key == $field['label']) {
+                    $data[$key] = self::normalize_field($value, $field);
                 }
             }
         }
-        return $sf_lead;
+        return $data;
     }
 
-    private static function minify_lead($lead_fields)
+    private static function clean($data)
     {
-        $minified_array = [];
-        foreach ($lead_fields as $key => $lead_field) {
-            if (gettype($lead_field) == 'array' && sizeof($lead_field) > 0) {
-                $minified_array[$key] = $lead_field;
-            }
-            if (gettype($lead_field) != 'array' && !is_null($lead_field) && $lead_field !== '') {
-                $minified_array[$key] = $lead_field;
+        $clean_data = [];
+        foreach ($data as $key => $field) {
+            if (gettype($field) == 'array' && sizeof($field) > 0) {
+                $clean_data[$key] = $field;
+            } elseif (gettype($field) != 'array' && !is_null($field) &&
+                $field !== ''
+            ) {
+                $clean_data[$key] = $field;
             }
         }
-        return $minified_array;
+        return $clean_data;
     }
 
-    private static function decode_lead($lead_data, $data_structure)
+    private static function decode($data, $structure)
     {
-        $decoded_array = [];
-        $decoded_array['oid'] = $data_structure['oid'];
-        foreach ($lead_data as $key => $value) {
-            foreach ($data_structure['fields'] as $k => $field) {
+        $decoded = [];
+        $decoded['oid'] = $structure['oid'];
+        foreach ($data as $key => $value) {
+            foreach ($structure['fields'] as $k => $field) {
                 if ($field['label'] == $key) {
-                    $decoded_array[$k] = $value;
+                    $decoded[$k] = $value;
                 }
             }
         }
-        return $decoded_array;
+        return $decoded;
     }
 
-    public static function submit($lead, $web_to_load_html_file)
+    public static function submit($data, $w2l_file)
     {
-        $data_structure = Parser::parse($web_to_load_html_file);
-        $normalized_lead = self::normalize_lead($lead, $data_structure);
-        $minified_lead = self::minify_lead($normalized_lead);
-        $decoded_lead = self::decode_lead($minified_lead, $data_structure);
+        $structure = self::parse($w2l_file);
+        $lead = self::decode(
+            self::clean(self::normalize($data, $structure)),
+            $structure);
 
         try {
             $ch = curl_init();
-            curl_setopt($ch, CURLOPT_URL, $data_structure['action']);
+            curl_setopt($ch, CURLOPT_URL, $structure['action']);
             curl_setopt($ch, CURLOPT_POST, 1);
-            curl_setopt($ch, CURLOPT_POSTFIELDS,
-                http_build_query($decoded_lead));
+            curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($lead));
             curl_exec($ch);
             return TRUE;
         } catch (\Exception $ex) {
